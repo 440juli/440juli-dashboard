@@ -443,11 +443,38 @@ async function loadFromSupabase() {
 async function saveToSupabase() {
   if (!currentUser) return;
   showSaving(true);
-  const { error } = await sb
-    .from('dashboard_state')
-    .upsert({ user_id: currentUser.id, state, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+  try {
+    // First check if row exists
+    const { data: existing } = await sb
+      .from('dashboard_state')
+      .select('id')
+      .eq('user_id', currentUser.id)
+      .single();
+
+    let error;
+    if (existing) {
+      // Row exists — update it
+      const { error: updateError } = await sb
+        .from('dashboard_state')
+        .update({ state, updated_at: new Date().toISOString() })
+        .eq('user_id', currentUser.id);
+      error = updateError;
+    } else {
+      // No row — insert new one
+      const { error: insertError } = await sb
+        .from('dashboard_state')
+        .insert({ user_id: currentUser.id, state, updated_at: new Date().toISOString() });
+      error = insertError;
+    }
+
+    if (error) {
+      console.error('Save error:', error);
+      showToast('⚠️ Fehler: ' + error.message);
+    }
+  } catch(e) {
+    console.error('Save failed:', e);
+  }
   showSaving(false);
-  if (error) showToast('⚠️ Fehler beim Speichern: ' + error.message);
 }
 
 function saveState() {
