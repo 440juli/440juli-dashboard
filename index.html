@@ -306,7 +306,14 @@ td { padding:11px 14px; font-size:12px; color:var(--text); white-space:nowrap; }
 const SUPABASE_URL = 'https://cyevfuadksidwqoyzhhr.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_I73N4ksJLe00mEPmXhd8lg_H1ApZ9XH';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage
+  }
+});
 
 // ══════════════════════════════════════════════════
 // CONSTANTS
