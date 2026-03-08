@@ -393,6 +393,19 @@ sb.auth.onAuthStateChange(async (event, session) => {
   }
 });
 
+// Manual session check on page load (needed for new sb_publishable_ key format)
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user && !currentUser) {
+    currentUser = session.user;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display   = 'block';
+    document.getElementById('userBadge').textContent     = '👤 ' + session.user.email;
+    await loadFromSupabase();
+    startRealtimeSync();
+  }
+})();
+
 // ══════════════════════════════════════════════════
 // SUPABASE PERSISTENCE
 // ══════════════════════════════════════════════════
