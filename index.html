@@ -494,7 +494,7 @@ async function saveToSupabase() {
 function saveState() {
   // Debounced save — don't hammer Supabase on every keystroke
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveToSupabase, 800);
+  saveTimer = setTimeout(saveToSupabase, 100);
 }
 
 function showSaving(on) {
@@ -705,14 +705,14 @@ function buildColorPicker() {
 
 function pickColor(c) { pickedColor=c; buildColorPicker(); }
 
-function confirmTabModal() {
+async function confirmTabModal() {
   const name=document.getElementById('tm_name').value.trim();
   if (!name) { showToast('⚠️ Name fehlt!'); return; }
   if (tabModalMode==='new') {
     const tab={id:uid(),name,color:pickedColor,orders:[]};
     state.tabs.push(tab);
     activeTabId=tab.id;
-    saveState();
+    await saveToSupabase();
     renderTabBar();
     const container=document.getElementById('tabContents');
     const div=document.createElement('div');
@@ -725,7 +725,7 @@ function confirmTabModal() {
   } else {
     const tab=getTab(renamingTabId);
     tab.name=name; tab.color=pickedColor;
-    saveState(); renderTabBar(); fillPanel(renamingTabId);
+    await saveToSupabase(); renderTabBar(); fillPanel(renamingTabId);
     showToast('✏️ Register umbenannt');
   }
   closeTabModal();
