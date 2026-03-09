@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OrderTracker · Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -306,14 +306,46 @@ td { padding:11px 14px; font-size:12px; color:var(--text); white-space:nowrap; }
 const SUPABASE_URL = 'https://cyevfuadksidwqoyzhhr.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5ZXZmdWFka3NpZHdxb3l6aGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Njk1NTcsImV4cCI6MjA4ODU0NTU1N30.y9oDckUgt7B36ZbW--EIgb-GOuYsdaHx_gryX2IqdoI';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage
+// Direct REST API — no SDK needed
+let _accessToken = localStorage.getItem('sb_access_token') || null;
+let _refreshToken = localStorage.getItem('sb_refresh_token') || null;
+
+async function apiAuth(path, body) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+async function getToken() {
+  if (_accessToken) return _accessToken;
+  if (_refreshToken) {
+    const data = await apiAuth('/token?grant_type=refresh_token', { refresh_token: _refreshToken });
+    if (data.access_token) {
+      _accessToken = data.access_token;
+      _refreshToken = data.refresh_token;
+      localStorage.setItem('sb_access_token', _accessToken);
+      localStorage.setItem('sb_refresh_token', _refreshToken);
+      return _accessToken;
+    }
   }
-});
+  return null;
+}
+
+async function dbFetch(path, options = {}) {
+  const token = await getToken();
+  return fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${token}`,
+      ...options.headers
+    }
+  });
+}
 
 // ══════════════════════════════════════════════════
 // CONSTANTS
@@ -349,8 +381,20 @@ async function doLogin() {
   if (!email||!pass) { msg.textContent='Bitte alle Felder ausfüllen.'; return; }
   btn.innerHTML = '<span class="spin"></span>';
   msg.textContent = '';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) { msg.textContent = '❌ ' + error.message; btn.textContent='Anmelden'; }
+  const data = await apiAuth('/token?grant_type=password', { email, password: pass });
+  if (data.error || data.error_description) {
+    msg.textContent = '❌ ' + (data.error_description || data.error);
+    btn.textContent = 'Anmelden';
+  } else {
+    _accessToken = data.access_token;
+    _refreshToken = data.refresh_token;
+    localStorage.setItem('sb_access_token', _accessToken);
+    localStorage.setItem('sb_refresh_token', _refreshToken);
+    currentUser = data.user;
+    showApp();
+    await loadFromSupabase();
+    startRealtimeSync();
+  }
 }
 
 async function doRegister() {
@@ -362,9 +406,9 @@ async function doRegister() {
   if (pass.length < 6) { msg.textContent='Passwort muss mind. 6 Zeichen haben.'; return; }
   btn.innerHTML = '<span class="spin"></span>';
   msg.textContent = '';
-  const { error } = await sb.auth.signUp({ email, password: pass });
-  if (error) {
-    msg.className='login-err'; msg.textContent='❌ '+error.message;
+  const data = await apiAuth('/signup', { email, password: pass });
+  if (data.error || data.error_description) {
+    msg.className='login-err'; msg.textContent='❌ '+(data.error_description||data.error);
   } else {
     msg.className='login-ok';
     msg.textContent='✅ Bestätigungs-Mail gesendet! Bitte E-Mail bestätigen, dann anmelden.';
@@ -373,36 +417,36 @@ async function doRegister() {
 }
 
 async function doLogout() {
-  await sb.auth.signOut();
+  _accessToken = null; _refreshToken = null;
+  localStorage.removeItem('sb_access_token');
+  localStorage.removeItem('sb_refresh_token');
   location.reload();
 }
 
-// Listen for auth state changes
-sb.auth.onAuthStateChange(async (event, session) => {
-  if (session?.user) {
-    currentUser = session.user;
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('appScreen').style.display   = 'block';
-    document.getElementById('userBadge').textContent     = '👤 ' + session.user.email;
-    await loadFromSupabase();
-    startRealtimeSync();
-  } else {
-    currentUser = null;
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('appScreen').style.display   = 'none';
-  }
-});
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display   = 'block';
+  document.getElementById('userBadge').textContent     = '👤 ' + (currentUser?.email || '');
+}
 
-// Manual session check on page load (needed for new sb_publishable_ key format)
+// Auto-login on page load
 (async () => {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session?.user && !currentUser) {
-    currentUser = session.user;
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('appScreen').style.display   = 'block';
-    document.getElementById('userBadge').textContent     = '👤 ' + session.user.email;
-    await loadFromSupabase();
-    startRealtimeSync();
+  const token = await getToken();
+  if (token) {
+    // Get user info from token
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` }
+    });
+    const user = await res.json();
+    if (user?.id) {
+      currentUser = user;
+      showApp();
+      await loadFromSupabase();
+      startRealtimeSync();
+    } else {
+      localStorage.removeItem('sb_access_token');
+      localStorage.removeItem('sb_refresh_token');
+    }
   }
 })();
 
@@ -411,16 +455,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
 // ══════════════════════════════════════════════════
 async function loadFromSupabase() {
   try {
-    const token = (await sb.auth.getSession()).data.session?.access_token;
-    if (!token) { state = { tabs: [defaultTab()] }; activeTabId = state.tabs[0].id; renderTabBar(); renderAllPanels(); return; }
-
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_state?user_id=eq.${currentUser.id}&select=state`, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
+    const res = await dbFetch(`/dashboard_state?user_id=eq.${currentUser.id}&select=state`);
     const rows = await res.json();
     if (rows?.length && rows[0]?.state) {
       state = rows[0].state;
@@ -442,31 +477,13 @@ async function saveToSupabase() {
   if (!currentUser) return;
   showSaving(true);
   try {
-    const token = (await sb.auth.getSession()).data.session?.access_token;
-    if (!token) { showSaving(false); return; }
-
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_state`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${token}`,
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({
-        user_id: currentUser.id,
-        state: state,
-        updated_at: new Date().toISOString()
-      })
+    await dbFetch("/dashboard_state", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify({ user_id: currentUser.id, state, updated_at: new Date().toISOString() })
     });
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('Save error:', err);
-      showToast('⚠️ Fehler beim Speichern');
-    }
   } catch(e) {
-    console.error('Save failed:', e);
+    console.error("Save failed:", e);
   }
   showSaving(false);
 }
@@ -885,39 +902,24 @@ function copyUrl(url) { navigator.clipboard.writeText(url).then(()=>showToast('�
 // this fires automatically → dashboard refreshes
 // ══════════════════════════════════════════════════
 function startRealtimeSync() {
-  // Update status to connected
-  document.getElementById('statusDot').className = 'status-dot active';
-  document.getElementById('statusText').textContent = 'Live · Webhooks aktiv';
-
-  // Subscribe to changes on our row in dashboard_state
-  sb.channel('dashboard_changes')
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'dashboard_state',
-      filter: `user_id=eq.${currentUser.id}`
-    }, async (payload) => {
-      // New data arrived (e.g. from a webhook) — reload
-      if (payload.new?.state) {
-        state = payload.new.state;
-        renderTabBar();
-        // Refresh all visible panels
-        state.tabs.forEach(tab => {
-          const panel = document.getElementById('panel_' + tab.id);
-          if (panel) fillPanel(tab.id);
-        });
-        showToast('📦 Neuer Webhook eingegangen!');
+  document.getElementById("statusDot").className = "status-dot active";
+  document.getElementById("statusText").textContent = "Live · Webhooks aktiv";
+  // Poll every 10s for new data (realtime without SDK)
+  setInterval(async () => {
+    try {
+      const res = await dbFetch(`/dashboard_state?user_id=eq.${currentUser.id}&select=state,updated_at`);
+      const rows = await res.json();
+      if (rows?.[0]?.state) {
+        const newState = rows[0].state;
+        if (JSON.stringify(newState) !== JSON.stringify(state)) {
+          state = newState;
+          renderTabBar();
+          state.tabs.forEach(tab => { const p = document.getElementById("panel_"+tab.id); if(p) fillPanel(tab.id); });
+          showToast("📦 Neue Daten geladen!");
+        }
       }
-    })
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        document.getElementById('statusDot').className = 'status-dot active';
-        document.getElementById('statusText').textContent = 'Live · Webhooks aktiv';
-      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        document.getElementById('statusDot').className = 'status-dot';
-        document.getElementById('statusText').textContent = 'Verbindung unterbrochen';
-      }
-    });
+    } catch(e) {}
+  }, 10000);
 }
 
 // ══════════════════════════════════════════════════
