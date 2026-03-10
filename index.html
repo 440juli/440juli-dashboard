@@ -898,6 +898,7 @@ function fillPanel(tabId) {
   <button class="btn btn-primary" onclick="copyDiscordUrl('${tab.id}')">🔗 URL kopieren</button>
 </div>
 
+
     <div class="table-section">
       <div class="table-header">
         <div class="table-title">
@@ -1169,6 +1170,23 @@ async function lookupSku(tabId,orderId,sku) {
 // ══════════════════════════════════════════════════
 // WEBHOOK URL
 // ══════════════════════════════════════════════════
+function copyDiscordUrl(tabId) {
+  const tab = getTab(tabId);
+  if (!tab.discordWebhookUrl) {
+    showToast('⚠️ Bitte erst Discord-Webhook-URL einfügen');
+    return;
+  }
+  const webhookPart = tab.discordWebhookUrl.split('/api/webhooks/')[1];
+  const fullUrl = 'https://cooktracker.de/api/discord/' + webhookPart;
+  navigator.clipboard.writeText(fullUrl).then(() => showToast('📋 URL für Discord kopiert!'));
+}
+
+async function updateDiscordWebhook(tabId, url) {
+  const tab = getTab(tabId);
+  tab.discordWebhookUrl = url.trim();
+  await saveToSupabase();
+  showToast('✅ Discord-Webhook gespeichert');
+}
 function copyUrl(url) { navigator.clipboard.writeText(url).then(()=>showToast('📋 URL kopiert!')); }
 
 
