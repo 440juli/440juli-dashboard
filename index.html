@@ -889,10 +889,15 @@ function fillPanel(tabId) {
       <div class="stat-card" style="border-top:2px solid ${tab.color}"><div class="stat-label">Shops</div><div class="stat-value success">${shops}</div></div>
     </div>
     <div class="webhook-section" style="border-left:3px solid ${tab.color}">
-      <div class="webhook-label">Webhook URL</div>
-      <div class="webhook-url-box" onclick="copyUrl('${webhookUrl}')" title="Klicken zum Kopieren">${webhookUrl}</div>
-      <button class="btn btn-primary" onclick="copyUrl('${webhookUrl}')">📋 Kopieren</button>
-    </div>
+  <div class="webhook-label">Discord Webhook URL</div>
+  <input type="text" class="webhook-url-box" 
+    value="${tab.discordWebhookUrl || ''}" 
+    placeholder="https://discord.com/api/webhooks/..."
+    onchange="updateDiscordWebhook('${tab.id}', this.value)"
+    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--r2);padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);min-width:180px;width:320px;">
+  <button class="btn btn-primary" onclick="copyDiscordUrl('${tab.id}')">🔗 URL kopieren</button>
+</div>
+
     <div class="table-section">
       <div class="table-header">
         <div class="table-title">
@@ -1195,6 +1200,22 @@ document.addEventListener('keydown',e=>{
   if(e.key==='n'&&tag!=='input'&&activeTabId) showEntryModal(activeTabId);
   if(e.key==='t'&&tag!=='input') showNewTabModal();
 });
+function copyDiscordUrl(tabId) {
+  const tab = getTab(tabId);
+  if (!tab.discordWebhookUrl) {
+    showToast('⚠️ Bitte erst Discord-Webhook-URL einfügen');
+    return;
+  }
+  const fullUrl = 'https://deine-domain.com/api/discord/' + tab.discordWebhookUrl.split('/').pop();
+  navigator.clipboard.writeText(fullUrl).then(() => showToast('📋 URL für Discord kopiert!'));
+}
+
+async function updateDiscordWebhook(tabId, url) {
+  const tab = getTab(tabId);
+  tab.discordWebhookUrl = url.trim();
+  await saveToSupabase();
+  showToast('✅ Discord-Webhook gespeichert');
+}
 </script>
 </body>
 </html>
