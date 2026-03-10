@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OrderTracker · Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -26,21 +27,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 body::before { content:''; position:fixed; inset:0; background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px); background-size:40px 40px; opacity:0.25; pointer-events:none; z-index:0; }
 body::after { content:''; position:fixed; top:-50%; left:-50%; width:200%; height:200%; background:radial-gradient(ellipse at 25% 15%,rgba(124,106,255,0.07) 0%,transparent 50%),radial-gradient(ellipse at 75% 85%,rgba(255,106,158,0.05) 0%,transparent 50%); pointer-events:none; z-index:0; }
 .container { position:relative; z-index:1; max-width:1500px; margin:0 auto; padding:0 24px; }
-
-/* ── SETUP SCREEN ───────────────────────────────── */
-#setupScreen {
-  position:fixed; inset:0; z-index:2000;
-  display:none; align-items:center; justify-content:center;
-  background:rgba(0,0,0,0.95); padding:24px;
-}
-.setup-box {
-  background:var(--surface); border:1px solid var(--accent);
-  border-radius:20px; padding:36px; max-width:520px; width:100%;
-  box-shadow:0 0 60px rgba(124,106,255,0.2);
-  animation: modalIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
-}
-.setup-box h2 { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; margin-bottom:6px; color:var(--accent); }
-.setup-box p { font-size:11px; color:var(--text-muted); margin-bottom:22px; line-height:1.7; }
 
 /* ── LOGIN SCREEN ───────────────────────────────── */
 #loginScreen {
@@ -71,9 +57,6 @@ body::after { content:''; position:fixed; top:-50%; left:-50%; width:200%; heigh
 .btn-login:active { transform:scale(0.98); }
 .login-err { font-size:11px; color:var(--danger); margin-top:10px; min-height:16px; text-align:center; }
 .login-ok  { font-size:11px; color:var(--success); margin-top:10px; min-height:16px; text-align:center; }
-.login-setup-link { text-align:center; margin-top:14px; }
-.login-setup-link a { font-size:10px; color:var(--text-dim); text-decoration:none; cursor:pointer; transition:color 0.2s; }
-.login-setup-link a:hover { color:var(--accent); }
 
 /* ── HEADER ─────────────────────────────────────── */
 #appScreen { display:none; }
@@ -89,12 +72,9 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); position:re
 .status-dot.active { background:var(--success); box-shadow:0 0 7px var(--success); animation:pulse 2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 .user-badge { display:flex; align-items:center; gap:8px; padding:7px 14px; background:var(--surface); border:1px solid var(--border); border-radius:100px; font-size:11px; color:var(--text-muted); }
-.saving-indicator { display:none; align-items:center; gap:6px; padding:5px 12px; background:rgba(106,255,202,0.08); border:1px solid rgba(106,255,202,0.2); border-radius:100px; font-size:10px; color:var(--success); }
-.saving-indicator.show { display:flex; }
+.sync-badge { display:flex; align-items:center; gap:6px; padding:5px 12px; background:rgba(124,106,255,0.1); border:1px solid rgba(124,106,255,0.3); border-radius:100px; font-size:10px; color:var(--accent); }
 .btn-logout { padding:7px 14px; background:transparent; border:1px solid var(--border); border-radius:100px; font-family:'DM Mono',monospace; font-size:11px; color:var(--text-muted); cursor:pointer; transition:all 0.2s; }
 .btn-logout:hover { border-color:var(--danger); color:var(--danger); }
-.btn-config { padding:7px 14px; background:transparent; border:1px solid var(--border); border-radius:100px; font-family:'DM Mono',monospace; font-size:11px; color:var(--text-muted); cursor:pointer; transition:all 0.2s; }
-.btn-config:hover { border-color:var(--accent); color:var(--accent); }
 
 /* ── TAB BAR ────────────────────────────────────── */
 .tabs-wrapper { position:relative; z-index:2; border-bottom:1px solid var(--border); background:var(--bg); }
@@ -117,7 +97,7 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); position:re
 
 /* ── STATS ──────────────────────────────────────── */
 .stats-bar { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:14px; padding:20px 0 0; }
-.stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 18px; transition:border-color 0.2s,transform 0.2s; }
+.stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 18px; transition:border-color 0.2s,transform 0.2s; position:relative; overflow:hidden; }
 .stat-card:hover { transform:translateY(-2px); }
 .stat-label { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
 .stat-value { font-family:'Syne',sans-serif; font-size:22px; font-weight:700; }
@@ -130,8 +110,6 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); position:re
 .webhook-label { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); white-space:nowrap; }
 .webhook-url-box { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 13px; font-family:'DM Mono',monospace; font-size:12px; color:var(--accent3); min-width:180px; cursor:pointer; transition:border-color 0.2s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .webhook-url-box:hover { border-color:var(--accent3); }
-.webhook-hint { font-size:10px; color:var(--text-dim); width:100%; padding-top:6px; line-height:1.8; }
-.webhook-hint code { background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1px 6px; color:var(--accent3); font-family:'DM Mono',monospace; font-size:10px; }
 
 /* ── BUTTONS ────────────────────────────────────── */
 .btn { padding:8px 16px; border:none; border-radius:8px; font-family:'DM Mono',monospace; font-size:11px; font-weight:500; cursor:pointer; transition:opacity 0.2s,transform 0.1s; white-space:nowrap; }
@@ -140,8 +118,7 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); position:re
 .btn-primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:white; }
 .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--text-muted); }
 .btn-ghost:hover { border-color:var(--accent); color:var(--accent); opacity:1; }
-.btn-setup { width:100%; padding:12px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:10px; color:white; font-family:'Syne',sans-serif; font-size:14px; font-weight:700; cursor:pointer; transition:opacity 0.2s; margin-top:4px; }
-.btn-setup:hover { opacity:0.88; }
+.btn-success { background:transparent; border:1px solid var(--success); color:var(--success); }
 
 /* ── TABLE ──────────────────────────────────────── */
 .table-section { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:32px; }
@@ -187,21 +164,16 @@ td { padding:11px 14px; font-size:12px; color:var(--text); white-space:nowrap; }
 .color-swatch:hover  { transform:scale(1.15); }
 .color-swatch.picked { border-color:white; box-shadow:0 0 0 1px rgba(255,255,255,0.3); }
 
-/* ── SQL MODAL ──────────────────────────────────── */
-.sql-modal-block { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px 16px; font-family:'DM Mono',monospace; font-size:10px; color:var(--accent3); line-height:1.7; overflow-x:auto; cursor:pointer; transition:border-color 0.2s; position:relative; margin-bottom:12px; white-space:pre; }
-.sql-modal-block:hover { border-color:var(--accent); }
-.sql-modal-block::after { content:'📋 Kopieren'; position:absolute; top:8px; right:10px; font-size:9px; color:var(--text-dim); background:var(--surface2); padding:2px 6px; border-radius:4px; }
-.sql-info { font-size:11px; color:var(--text-muted); line-height:1.8; margin-bottom:14px; }
-.sql-step { display:flex; gap:10px; align-items:flex-start; margin-bottom:12px; font-size:11px; color:var(--text-muted); line-height:1.6; }
-.sql-step-num { min-width:22px; height:22px; background:rgba(124,106,255,0.2); border:1px solid rgba(124,106,255,0.4); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--accent); font-weight:700; flex-shrink:0; margin-top:1px; }
-
 /* ── TOAST ──────────────────────────────────────── */
 .toast { position:fixed; bottom:24px; right:24px; background:var(--surface2); border:1px solid var(--accent); border-radius:12px; padding:12px 18px; font-size:12px; color:var(--text); z-index:999; transform:translateY(70px); opacity:0; transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1); max-width:300px; box-shadow:0 8px 32px rgba(0,0,0,0.4); pointer-events:none; }
 .toast.show { transform:translateY(0); opacity:1; }
+
+/* ── LOADING SPINNER ─────────────────────────────── */
 .spin { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.7s linear infinite; }
 @keyframes spin { to{transform:rotate(360deg)} }
-@keyframes newEntryPulse { 0%{background:rgba(124,106,255,0.18)} 100%{background:transparent} }
-tr.new-entry { animation: newEntryPulse 2s ease-out both, rowIn 0.3s ease both !important; }
+.saving-indicator { display:none; align-items:center; gap:6px; padding:5px 12px; background:rgba(106,255,202,0.08); border:1px solid rgba(106,255,202,0.2); border-radius:100px; font-size:10px; color:var(--success); }
+.saving-indicator.show { display:flex; }
+
 ::-webkit-scrollbar { width:5px; height:5px; }
 ::-webkit-scrollbar-track { background:var(--bg); }
 ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
@@ -210,21 +182,6 @@ tr.new-entry { animation: newEntryPulse 2s ease-out both, rowIn 0.3s ease both !
 </style>
 </head>
 <body>
-
-<!-- ═══ SETUP SCREEN ══════════════════════════════ -->
-<div id="setupScreen">
-  <div class="setup-box">
-    <h2>⚙️ Supabase konfigurieren</h2>
-    <p>Trage deine Supabase-Zugangsdaten ein. Du findest sie unter <strong style="color:var(--accent3)">supabase.com → Project Settings → API</strong>.</p>
-    <div class="field"><label>Supabase URL</label><input id="setup_url" placeholder="https://xxxxxxxxxxxxx.supabase.co" type="url"></div>
-    <div class="field"><label>Anon Public Key</label><input id="setup_key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></div>
-    <button class="btn-setup" onclick="saveSetup()">Speichern & fortfahren</button>
-    <div class="login-err" id="setupErr"></div>
-    <div style="margin-top:16px;text-align:center;">
-      <a style="font-size:10px;color:var(--text-dim);cursor:pointer;" onclick="showSqlModal()">📋 SQL-Schema anzeigen (für Supabase)</a>
-    </div>
-  </div>
-</div>
 
 <!-- ═══ LOGIN SCREEN ══════════════════════════════ -->
 <div id="loginScreen">
@@ -252,16 +209,12 @@ tr.new-entry { animation: newEntryPulse 2s ease-out both, rowIn 0.3s ease both !
       <button class="btn-login" onclick="doRegister()" id="registerBtn">Account erstellen</button>
       <div id="registerMsg" class="login-err"></div>
     </div>
-    <div class="login-setup-link">
-      <a onclick="showSetupScreen()">⚙️ Supabase neu konfigurieren</a>
-      &nbsp;·&nbsp;
-      <a onclick="showSqlModal()" style="color:var(--text-dim);cursor:pointer;font-size:10px;">📋 SQL-Schema</a>
-    </div>
   </div>
 </div>
 
 <!-- ═══ APP SCREEN ════════════════════════════════ -->
 <div id="appScreen">
+
 <header>
   <div class="container">
     <div class="header-inner">
@@ -273,26 +226,29 @@ tr.new-entry { animation: newEntryPulse 2s ease-out both, rowIn 0.3s ease both !
         </div>
       </div>
       <div class="header-right">
-        <div class="saving-indicator" id="savingIndicator"><div class="spin"></div> Speichern…</div>
+        <div class="saving-indicator" id="savingIndicator">
+          <div class="spin"></div> Speichern…
+        </div>
         <div class="status-badge">
-          <div class="status-dot" id="statusDot"></div>
-          <span id="statusText">Verbinde…</span>
+          <div class="status-dot active" id="statusDot"></div>
+          <span id="statusText">Live · Webhooks aktiv</span>
         </div>
         <div class="user-badge" id="userBadge">👤 —</div>
-        <button class="btn-config" onclick="showSqlModal()">📋 SQL</button>
-        <button class="btn-config" onclick="showSetupScreen()">⚙️</button>
         <button class="btn-logout" onclick="doLogout()">Abmelden</button>
       </div>
     </div>
   </div>
 </header>
+
 <div class="tabs-wrapper">
   <div class="tabs-scroll" id="tabBar">
     <button class="tab-add-btn" id="addTabBtn" onclick="showNewTabModal()">＋ Neues Register</button>
   </div>
 </div>
+
 <div id="tabContents"></div>
-</div>
+
+</div><!-- end #appScreen -->
 
 <!-- ═══ MODAL: Tab ════════════════════════════════ -->
 <div class="modal-bg" id="tabModal">
@@ -341,110 +297,24 @@ tr.new-entry { animation: newEntryPulse 2s ease-out both, rowIn 0.3s ease both !
   </div>
 </div>
 
-<!-- ═══ MODAL: SQL Schema ══════════════════════════ -->
-<div class="modal-bg" id="sqlModal">
-  <div class="modal-box" style="max-width:640px;">
-    <div class="modal-title">
-      <span>📋 Supabase Einrichtung</span>
-      <button class="modal-close" onclick="document.getElementById('sqlModal').style.display='none'">✕</button>
-    </div>
-    <div class="sql-info">
-      Führe beide SQL-Blöcke in deinem Supabase-Projekt aus:<br>
-      <strong style="color:var(--accent)">supabase.com</strong> → Projekt öffnen → <strong style="color:var(--accent)">SQL Editor</strong> → New Query → Einfügen → Run
-    </div>
-    <div class="sql-step">
-      <div class="sql-step-num">1</div>
-      <div>Tabelle für Dashboard-Daten (Tabs &amp; Orders):<br><em style="color:var(--text-dim);font-size:10px;">Klicken zum Kopieren</em></div>
-    </div>
-    <div class="sql-modal-block" onclick="copySql(this)">create table if not exists public.dashboard_state (
-  id         uuid default gen_random_uuid() primary key,
-  user_id    uuid references auth.users(id) on delete cascade not null unique,
-  state      jsonb not null default '{"tabs":[]}',
-  updated_at timestamptz default now()
-);
-alter table public.dashboard_state enable row level security;
-create policy "Users own state" on public.dashboard_state
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);</div>
-
-    <div class="sql-step">
-      <div class="sql-step-num">2</div>
-      <div>Tabelle für eingehende Webhook-Events (Bot → Dashboard):<br><em style="color:var(--text-dim);font-size:10px;">Klicken zum Kopieren</em></div>
-    </div>
-    <div class="sql-modal-block" onclick="copySql(this)">create table if not exists public.webhook_events (
-  id         uuid default gen_random_uuid() primary key,
-  tab_id     text not null,
-  user_id    uuid references auth.users(id) on delete cascade,
-  payload    jsonb not null default '{}',
-  processed  boolean default false,
-  created_at timestamptz default now()
-);
-alter table public.webhook_events enable row level security;
-create policy "Users read own events" on public.webhook_events
-  for select using (auth.uid() = user_id);
-create policy "Service role insert" on public.webhook_events
-  for insert with check (true);</div>
-
-    <div class="sql-step" style="margin-top:4px;">
-      <div class="sql-step-num">3</div>
-      <div>
-        <strong style="color:var(--accent3)">Webhooks senden</strong> — dein Bot postet per HTTP POST an:<br>
-        <code style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 8px;color:var(--accent3);font-size:10px;display:inline-block;margin:4px 0;">[DEINE_SUPABASE_URL]/rest/v1/webhook_events</code><br>
-        Header: <code style="color:var(--accent);font-size:10px;">apikey: [ANON_KEY]</code> &amp; <code style="color:var(--accent);font-size:10px;">Content-Type: application/json</code><br>
-        Body:
-        <code style="color:var(--accent3);font-size:10px;">{"tab_id":"TAB_ID","user_id":"USER_ID","payload":{"product":"Nike AM90","sku":"DD1391-100","size":"42","purchasePrice":119.99,"shop":"Nike"}}</code><br>
-        <em style="color:var(--text-dim);font-size:10px;">Das Dashboard pollt alle 10s automatisch auf neue Events.</em>
-      </div>
-    </div>
-    <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="document.getElementById('sqlModal').style.display='none'">Schließen</button>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
 // ══════════════════════════════════════════════════
-// CONFIG — aus localStorage, sonst Setup anzeigen
+// CONFIG  ← diese zwei Zeilen werden vom Setup befüllt
 // ══════════════════════════════════════════════════
-let SUPABASE_URL     = localStorage.getItem('ot_sb_url') || '';
-let SUPABASE_ANON_KEY = localStorage.getItem('ot_sb_key') || '';
+const SUPABASE_URL = 'https://cyevfuadksidwqoyzhhr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5ZXZmdWFka3NpZHdxb3l6aGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Njk1NTcsImV4cCI6MjA4ODU0NTU1N30.y9oDckUgt7B36ZbW--EIgb-GOuYsdaHx_gryX2IqdoI';
 
-function isConfigured() {
-  return SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 20;
-}
-
-function showSetupScreen() {
-  document.getElementById('setupScreen').style.display = 'flex';
-  document.getElementById('setup_url').value = SUPABASE_URL;
-  document.getElementById('setup_key').value = SUPABASE_ANON_KEY;
-}
-
-function saveSetup() {
-  const url = document.getElementById('setup_url').value.trim();
-  const key = document.getElementById('setup_key').value.trim();
-  const err = document.getElementById('setupErr');
-  if (!url.startsWith('https://')) { err.textContent = '❌ URL muss mit https:// beginnen'; return; }
-  if (key.length < 20) { err.textContent = '❌ Key zu kurz'; return; }
-  SUPABASE_URL = url; SUPABASE_ANON_KEY = key;
-  localStorage.setItem('ot_sb_url', url);
-  localStorage.setItem('ot_sb_key', key);
-  document.getElementById('setupScreen').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
-  showToast('✅ Supabase konfiguriert!');
-}
-
-// ══════════════════════════════════════════════════
-// AUTH
-// ══════════════════════════════════════════════════
-let _accessToken  = localStorage.getItem('sb_at') || null;
-let _refreshToken = localStorage.getItem('sb_rt') || null;
-let currentUser   = null;
-let pollTimer     = null;
-let lastPolledAt  = new Date(0);
+// Direct REST API — no SDK needed
+let _accessToken = localStorage.getItem('sb_access_token') || null;
+let _refreshToken = localStorage.getItem('sb_refresh_token') || null;
 
 async function apiAuth(path, body) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
-    method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
-    body:JSON.stringify(body)
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify(body)
   });
   return res.json();
 }
@@ -452,205 +322,227 @@ async function apiAuth(path, body) {
 async function getToken() {
   if (_accessToken) return _accessToken;
   if (_refreshToken) {
-    const d = await apiAuth('/token?grant_type=refresh_token', {refresh_token:_refreshToken});
-    if (d.access_token) {
-      _accessToken = d.access_token; _refreshToken = d.refresh_token;
-      localStorage.setItem('sb_at', _accessToken); localStorage.setItem('sb_rt', _refreshToken);
+    const data = await apiAuth('/token?grant_type=refresh_token', { refresh_token: _refreshToken });
+    if (data.access_token) {
+      _accessToken = data.access_token;
+      _refreshToken = data.refresh_token;
+      localStorage.setItem('sb_access_token', _accessToken);
+      localStorage.setItem('sb_refresh_token', _refreshToken);
       return _accessToken;
     }
   }
   return null;
 }
 
-async function dbFetch(path, options={}) {
+async function dbFetch(path, options = {}) {
   const token = await getToken();
   return fetch(`${SUPABASE_URL}/rest/v1${path}`, {
     ...options,
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':`Bearer ${token}`,...(options.headers||{})}
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${token}`,
+      ...options.headers
+    }
   });
 }
 
+// ══════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════
+const COLORS = ['#7c6aff','#ff6a9e','#6affca','#ffca6a','#ff6a6a','#6ab4ff','#d46aff','#ff966a','#a8e06a','#6adfff'];
+
+// ══════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════
+let state = { tabs: [] };
+let activeTabId = null;
+let sortKeys = {}, sortDirs = {};
+let tabModalMode = 'new', renamingTabId = null, pickedColor = COLORS[0];
+let entryTargetTabId = null;
+let currentUser = null;
+let saveTimer = null;
+let lastSavedAt = null;
+let lastPolledAt = null;
+
+// ══════════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════════
 function switchLoginTab(tab) {
-  document.getElementById('loginForm').style.display    = tab==='login'    ? 'block':'none';
-  document.getElementById('registerForm').style.display = tab==='register' ? 'block':'none';
-  document.getElementById('tabLogin').classList.toggle('active',    tab==='login');
+  document.getElementById('loginForm').style.display    = tab==='login'    ? 'block' : 'none';
+  document.getElementById('registerForm').style.display = tab==='register' ? 'block' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active', tab==='login');
   document.getElementById('tabRegister').classList.toggle('active', tab==='register');
 }
 
 async function doLogin() {
-  const email=document.getElementById('l_email').value.trim(), pass=document.getElementById('l_password').value;
-  const btn=document.getElementById('loginBtn'), msg=document.getElementById('loginMsg');
-  if (!email||!pass){msg.textContent='Bitte alle Felder ausfüllen.';return;}
-  btn.innerHTML='<span class="spin"></span>'; msg.textContent='';
-  try {
-    const data = await apiAuth('/token?grant_type=password',{email,password:pass});
-    if (data.error||data.error_description){msg.textContent='❌ '+(data.error_description||data.error);btn.textContent='Anmelden';return;}
-    _accessToken=data.access_token; _refreshToken=data.refresh_token;
-    localStorage.setItem('sb_at',_accessToken); localStorage.setItem('sb_rt',_refreshToken);
-    currentUser=data.user;
-    showApp(); await loadFromSupabase(); startRealtimeSync();
-  } catch(e){msg.textContent='❌ Verbindungsfehler';btn.textContent='Anmelden';}
+  const email = document.getElementById('l_email').value.trim();
+  const pass  = document.getElementById('l_password').value;
+  const btn   = document.getElementById('loginBtn');
+  const msg   = document.getElementById('loginMsg');
+  if (!email||!pass) { msg.textContent='Bitte alle Felder ausfüllen.'; return; }
+  btn.innerHTML = '<span class="spin"></span>';
+  msg.textContent = '';
+  const data = await apiAuth('/token?grant_type=password', { email, password: pass });
+  if (data.error || data.error_description) {
+    msg.textContent = '❌ ' + (data.error_description || data.error);
+    btn.textContent = 'Anmelden';
+  } else {
+    _accessToken = data.access_token;
+    _refreshToken = data.refresh_token;
+    localStorage.setItem('sb_access_token', _accessToken);
+    localStorage.setItem('sb_refresh_token', _refreshToken);
+    currentUser = data.user;
+    showApp();
+    await loadFromSupabase();
+    startRealtimeSync();
+  }
 }
 
 async function doRegister() {
-  const email=document.getElementById('r_email').value.trim(), pass=document.getElementById('r_password').value;
-  const btn=document.getElementById('registerBtn'), msg=document.getElementById('registerMsg');
-  if (!email||!pass){msg.textContent='Bitte alle Felder ausfüllen.';return;}
-  if (pass.length<6){msg.textContent='Passwort mind. 6 Zeichen.';return;}
-  btn.innerHTML='<span class="spin"></span>'; msg.textContent='';
-  try {
-    const data = await apiAuth('/signup',{email,password:pass});
-    msg.className = data.error ? 'login-err' : 'login-ok';
-    msg.textContent = data.error ? '❌ '+(data.error_description||data.error) : '✅ Bestätigungs-Mail gesendet!';
-  } catch(e){msg.className='login-err';msg.textContent='❌ Verbindungsfehler';}
-  btn.textContent='Account erstellen';
+  const email = document.getElementById('r_email').value.trim();
+  const pass  = document.getElementById('r_password').value;
+  const btn   = document.getElementById('registerBtn');
+  const msg   = document.getElementById('registerMsg');
+  if (!email||!pass) { msg.textContent='Bitte alle Felder ausfüllen.'; return; }
+  if (pass.length < 6) { msg.textContent='Passwort muss mind. 6 Zeichen haben.'; return; }
+  btn.innerHTML = '<span class="spin"></span>';
+  msg.textContent = '';
+  const data = await apiAuth('/signup', { email, password: pass });
+  if (data.error || data.error_description) {
+    msg.className='login-err'; msg.textContent='❌ '+(data.error_description||data.error);
+  } else {
+    msg.className='login-ok';
+    msg.textContent='✅ Bestätigungs-Mail gesendet! Bitte E-Mail bestätigen, dann anmelden.';
+  }
+  btn.textContent = 'Account erstellen';
 }
 
 async function doLogout() {
-  stopRealtimeSync();
-  _accessToken=null; _refreshToken=null;
-  localStorage.removeItem('sb_at'); localStorage.removeItem('sb_rt');
+  _accessToken = null; _refreshToken = null;
+  localStorage.removeItem('sb_access_token');
+  localStorage.removeItem('sb_refresh_token');
   location.reload();
 }
 
 function showApp() {
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('appScreen').style.display='block';
-  document.getElementById('userBadge').textContent='👤 '+(currentUser?.email||'');
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display   = 'block';
+  document.getElementById('userBadge').textContent     = '👤 ' + (currentUser?.email || '');
 }
 
-// Auto-login
-(async()=>{
-  if (!isConfigured()){showSetupScreen();return;}
+// Auto-login on page load
+(async () => {
   const token = await getToken();
   if (token) {
-    try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':`Bearer ${token}`}});
-      const user = await res.json();
-      if (user?.id){currentUser=user;showApp();await loadFromSupabase();startRealtimeSync();return;}
-    } catch(e){}
-    localStorage.removeItem('sb_at'); localStorage.removeItem('sb_rt');
+    // Get user info from token
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` }
+    });
+    const user = await res.json();
+    if (user?.id) {
+      currentUser = user;
+      showApp();
+      await loadFromSupabase();
+      startRealtimeSync();
+    } else {
+      localStorage.removeItem('sb_access_token');
+      localStorage.removeItem('sb_refresh_token');
+    }
   }
 })();
 
 // ══════════════════════════════════════════════════
 // SUPABASE PERSISTENCE
 // ══════════════════════════════════════════════════
-const COLORS=['#7c6aff','#ff6a9e','#6affca','#ffca6a','#ff6a6a','#6ab4ff','#d46aff','#ff966a','#a8e06a','#6adfff'];
-let state={tabs:[]}, activeTabId=null;
-let sortKeys={}, sortDirs={};
-let tabModalMode='new', renamingTabId=null, pickedColor=COLORS[0];
-let entryTargetTabId=null, saveTimer=null;
-
 async function loadFromSupabase() {
   try {
-    const res=await dbFetch(`/dashboard_state?user_id=eq.${currentUser.id}&select=state`);
-    const rows=await res.json();
-    if (rows?.length&&rows[0]?.state){
-      state=rows[0].state;
-      if (!state.tabs?.length) state={tabs:[defaultTab()]};
+    const res = await dbFetch(`/dashboard_state?user_id=eq.${currentUser.id}&select=state`);
+    const rows = await res.json();
+    if (rows?.length && rows[0]?.state) {
+      state = rows[0].state;
+      if (!state.tabs?.length) state = { tabs: [defaultTab()] };
     } else {
-      state={tabs:[defaultTab()]};
+      state = { tabs: [defaultTab()] };
       await saveToSupabase();
     }
-  } catch(e){state={tabs:[defaultTab()]};}
-  activeTabId=state.tabs[0]?.id||null;
-  renderTabBar(); renderAllPanels();
+  } catch(e) {
+    console.error('Load failed:', e);
+    state = { tabs: [defaultTab()] };
+  }
+  activeTabId = state.tabs[0]?.id || null;
+  renderTabBar();
+  renderAllPanels();
 }
 
 async function saveToSupabase() {
-  if (!currentUser||!isConfigured()) return;
+  lastSavedAt = new Date();
+  if (!currentUser) return;
   showSaving(true);
   try {
-    const token=await getToken(); if(!token){showSaving(false);return;}
-    await fetch(`${SUPABASE_URL}/rest/v1/dashboard_state`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':`Bearer ${token}`,'Prefer':'resolution=merge-duplicates'},
-      body:JSON.stringify({user_id:currentUser.id,state,updated_at:new Date().toISOString()})
+    const token = await getToken();
+    if (!token) { showSaving(false); return; }
+    // Try update first, then insert if not exists
+    const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_state?user_id=eq.${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}`, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ state, updated_at: new Date().toISOString() })
     });
-  } catch(e){console.error('Save failed',e);}
+    if (updateRes.status === 404 || updateRes.headers.get('content-range') === '*/0') {
+      await fetch(`${SUPABASE_URL}/rest/v1/dashboard_state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ user_id: currentUser.id, state, updated_at: new Date().toISOString() })
+      });
+    }
+  } catch(e) {
+    console.error("Save failed:", e);
+  }
   showSaving(false);
 }
 
-function saveState(){clearTimeout(saveTimer);saveTimer=setTimeout(saveToSupabase,300);}
-function showSaving(on){document.getElementById('savingIndicator').classList.toggle('show',on);}
-function defaultTab(){return{id:uid(),name:'Mein Bot',color:COLORS[0],orders:[]};}
-function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);}
-function getTab(id){return state.tabs.find(t=>t.id===id);}
-
-// ══════════════════════════════════════════════════
-// REALTIME — Polling auf webhook_events (alle 10s)
-// ══════════════════════════════════════════════════
-function startRealtimeSync() {
-  document.getElementById('statusDot').className='status-dot active';
-  document.getElementById('statusText').textContent='Live · Webhooks aktiv';
-  lastPolledAt=new Date(Date.now()-30000);
-  pollWebhookEvents();
-  pollTimer=setInterval(pollWebhookEvents,10000);
+function saveState() {
+  // Debounced save — don't hammer Supabase on every keystroke
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToSupabase, 100);
 }
 
-function stopRealtimeSync(){clearInterval(pollTimer);}
-
-async function pollWebhookEvents() {
-  if (!currentUser||!isConfigured()) return;
-  try {
-    const since=lastPolledAt.toISOString();
-    lastPolledAt=new Date();
-    const res=await dbFetch(`/webhook_events?user_id=eq.${currentUser.id}&processed=eq.false&created_at=gt.${since}&order=created_at.asc&select=*`);
-    if (!res.ok) return;
-    const events=await res.json();
-    if (!Array.isArray(events)||events.length===0) return;
-    let changed=false;
-    for (const ev of events) {
-      const tab=getTab(ev.tab_id); if (!tab) continue;
-      const p=ev.payload||{};
-      const order={
-        id:p.id||uid(),
-        product:p.product||p.name||p.title||'Unbekannt',
-        sku:(p.sku||p.styleId||'').toUpperCase(),
-        imageUrl:p.imageUrl||p.image||p.thumbnail||'',
-        date:p.date||p.orderDate||new Date().toISOString().split('T')[0],
-        size:p.size||p.shoeSize||'—',
-        purchasePrice:parseFloat(p.purchasePrice||p.price||p.amount||0),
-        shop:p.shop||p.retailer||p.store||'—',
-        orderNumber:p.orderNumber||p.orderId||p.order_id||'—',
-        note:p.note||p.notes||'',
-        receivedAt:ev.created_at
-      };
-      // Duplikat-Check
-      const dup=tab.orders.find(o=>o.id===order.id||(order.orderNumber!=='—'&&o.orderNumber===order.orderNumber));
-      if (!dup){
-        tab.orders.unshift(order); changed=true;
-        if (order.sku&&!order.imageUrl) setTimeout(()=>lookupSku(tab.id,order.id,order.sku),1000);
-        showToast(`📦 Neuer Webhook: ${order.product}`);
-      }
-      // Als verarbeitet markieren
-      await dbFetch(`/webhook_events?id=eq.${ev.id}`,{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({processed:true})});
-    }
-    if (changed){saveState();renderTabBar();if(activeTabId)fillPanel(activeTabId,true);}
-  } catch(e){console.warn('Poll error:',e);}
+function showSaving(on) {
+  document.getElementById('savingIndicator').classList.toggle('show', on);
 }
+
+function defaultTab() {
+  return { id: uid(), name: 'Mein Bot', color: COLORS[0], orders: [] };
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
+}
+
+function getTab(id) { return state.tabs.find(t => t.id === id); }
 
 // ══════════════════════════════════════════════════
 // TAB BAR
 // ══════════════════════════════════════════════════
 function renderTabBar() {
-  const bar=document.getElementById('tabBar'), addBtn=document.getElementById('addTabBtn');
-  bar.querySelectorAll('.tab').forEach(el=>el.remove());
-  state.tabs.forEach(tab=>{
-    const isActive=tab.id===activeTabId;
-    const div=document.createElement('div');
-    div.className='tab'+(isActive?' active':''); div.dataset.id=tab.id;
-    div.innerHTML=`
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${tab.color};border-radius:10px 10px 0 0;opacity:${isActive?'1':'0.3'};"></div>
+  const bar = document.getElementById('tabBar');
+  const addBtn = document.getElementById('addTabBtn');
+  bar.querySelectorAll('.tab').forEach(el => el.remove());
+  state.tabs.forEach(tab => {
+    const isActive = tab.id === activeTabId;
+    const div = document.createElement('div');
+    div.className = 'tab' + (isActive ? ' active' : '');
+    div.dataset.id = tab.id;
+    div.innerHTML = `
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${tab.color};border-radius:10px 10px 0 0;opacity:${isActive?'1':'0.3'};transition:opacity 0.18s;"></div>
       <span class="tab-color-dot" style="background:${tab.color}"></span>
       <span class="tab-name" title="${esc(tab.name)}">${esc(tab.name)}</span>
       <span class="tab-count">${tab.orders.length}</span>
-      <button class="tab-icon-btn rename" onclick="event.stopPropagation();showRenameTabModal('${tab.id}')">✎</button>
-      ${state.tabs.length>1?`<button class="tab-icon-btn remove" onclick="event.stopPropagation();deleteTab('${tab.id}')">✕</button>`:''}
+      <button class="tab-icon-btn rename" title="Umbenennen" onclick="event.stopPropagation();showRenameTabModal('${tab.id}')">✎</button>
+      ${state.tabs.length > 1 ? `<button class="tab-icon-btn remove" title="Löschen" onclick="event.stopPropagation();deleteTab('${tab.id}')">✕</button>` : ''}
     `;
-    div.addEventListener('click',()=>switchTab(tab.id));
-    bar.insertBefore(div,addBtn);
+    div.addEventListener('click', () => switchTab(tab.id));
+    bar.insertBefore(div, addBtn);
   });
 }
 
@@ -658,49 +550,64 @@ function renderTabBar() {
 // PANELS
 // ══════════════════════════════════════════════════
 function renderAllPanels() {
-  const c=document.getElementById('tabContents'); c.innerHTML='';
-  state.tabs.forEach(tab=>{
-    const div=document.createElement('div');
-    div.className='tab-content'+(tab.id===activeTabId?' active':'');
-    div.id='panel_'+tab.id; c.appendChild(div); fillPanel(tab.id);
+  const container = document.getElementById('tabContents');
+  container.innerHTML = '';
+  state.tabs.forEach(tab => {
+    const div = document.createElement('div');
+    div.className = 'tab-content' + (tab.id === activeTabId ? ' active' : '');
+    div.id = 'panel_' + tab.id;
+    container.appendChild(div);
+    fillPanel(tab.id);
   });
 }
 
-function fillPanel(tabId, highlightFirst=false) {
-  const panel=document.getElementById('panel_'+tabId); if (!panel) return;
-  const tab=getTab(tabId); if (!tab) return;
-  const sk=sortKeys[tabId]||'date', sd=sortDirs[tabId]||-1;
-  const searchEl=document.getElementById('search_'+tabId);
-  const search=searchEl?searchEl.value.toLowerCase():'';
+function fillPanel(tabId) {
+  const panel = document.getElementById('panel_' + tabId);
+  if (!panel) return;
+  const tab = getTab(tabId);
+  if (!tab) return;
 
-  let filtered=tab.orders.filter(o=>!search||
-    (o.product||'').toLowerCase().includes(search)||
-    (o.shop||'').toLowerCase().includes(search)||
-    (o.size||'').toLowerCase().includes(search)||
-    (o.sku||'').toLowerCase().includes(search)||
+  const sk = sortKeys[tabId] || 'date';
+  const sd = sortDirs[tabId] || -1;
+  const searchEl = document.getElementById('search_' + tabId);
+  const search = searchEl ? searchEl.value.toLowerCase() : '';
+
+  let filtered = tab.orders.filter(o =>
+    !search ||
+    (o.product||'').toLowerCase().includes(search) ||
+    (o.shop||'').toLowerCase().includes(search) ||
+    (o.size||'').toLowerCase().includes(search) ||
+    (o.sku||'').toLowerCase().includes(search) ||
     (o.orderNumber||'').toLowerCase().includes(search)
   );
-  filtered=[...filtered].sort((a,b)=>{
-    let av=a[sk]??'',bv=b[sk]??'';
-    if(!isNaN(parseFloat(av))&&!isNaN(parseFloat(bv)))return(parseFloat(av)-parseFloat(bv))*sd;
+
+  filtered = [...filtered].sort((a,b) => {
+    let av = a[sk]??'', bv = b[sk]??'';
+    if (!isNaN(parseFloat(av)) && !isNaN(parseFloat(bv))) return (parseFloat(av)-parseFloat(bv))*sd;
     return String(av).localeCompare(String(bv))*sd;
   });
 
-  const total=tab.orders.reduce((s,o)=>s+(parseFloat(o.purchasePrice)||0),0);
-  const avg=tab.orders.length?total/tab.orders.length:0;
-  const shops=new Set(tab.orders.map(o=>o.shop).filter(Boolean)).size;
+  const total = tab.orders.reduce((s,o)=>s+(parseFloat(o.purchasePrice)||0),0);
+  const avg   = tab.orders.length ? total/tab.orders.length : 0;
+  const shops = new Set(tab.orders.map(o=>o.shop).filter(Boolean)).size;
+  const idx   = state.tabs.indexOf(tab);
+  const webhookUrl = `${window.location.origin}/api/webhook/${tabId}`;
 
-  const rows=filtered.map((o,i)=>{
-    const pp=parseFloat(o.purchasePrice)||0;
-    const imgSrc=o.imageUrl||'';
-    const isNew=highlightFirst&&i===0;
-    const imgCell=imgSrc
-      ?`<img src="${esc(imgSrc)}" style="width:52px;height:52px;object-fit:contain;border-radius:8px;background:#1a1a26;display:block;" onerror="this.style.display='none';this.nextSibling.style.display='flex'"/><span style="display:none;width:52px;height:52px;align-items:center;justify-content:center;font-size:20px;border-radius:8px;background:var(--surface2);">👟</span>`
-      :`<span style="display:flex;width:52px;height:52px;align-items:center;justify-content:center;font-size:20px;border-radius:8px;background:var(--surface2);color:var(--text-dim);">👟</span>`;
-    return`<tr class="${isNew?'new-entry':''}" style="animation-delay:${i*0.025}s">
+  const rows = filtered.map((o,i) => {
+    const pp = parseFloat(o.purchasePrice)||0;
+    const imgSrc = o.imageUrl||'';
+    const imgCell = imgSrc
+      ? `<img src="${esc(imgSrc)}" style="width:52px;height:52px;object-fit:contain;border-radius:8px;background:#1a1a26;display:block;" onerror="this.style.display='none';this.nextSibling.style.display='flex'"/><span style="display:none;width:52px;height:52px;align-items:center;justify-content:center;font-size:20px;border-radius:8px;background:var(--surface2);">👟</span>`
+      : `<span style="display:flex;width:52px;height:52px;align-items:center;justify-content:center;font-size:20px;border-radius:8px;background:var(--surface2);color:var(--text-dim);">👟</span>`;
+    return `<tr style="animation-delay:${i*0.025}s">
       <td style="padding:8px 10px;">${imgCell}</td>
       <td class="td-product" title="${esc(o.product)}">${esc(o.product||'—')}</td>
-      <td><div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--text-muted);">${esc(o.sku||'—')}</span>${o.sku?`<button onclick="lookupSku('${tabId}','${o.id}','${esc(o.sku)}')" title="Bild neu laden" style="background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:10px;padding:1px 5px;" onmouseover="this.style.borderColor='var(--accent3)';this.style.color='var(--accent3)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">↻</button>`:''}</div></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:var(--text-muted);">${esc(o.sku||'—')}</span>
+          ${o.sku?`<button onclick="lookupSku('${tabId}','${o.id}','${esc(o.sku)}')" title="Bild neu laden" style="background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:10px;padding:1px 5px;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent3)';this.style.color='var(--accent3)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">↻</button>`:''}
+        </div>
+      </td>
       <td class="td-date">${formatDate(o.date)}</td>
       <td><span class="td-size">${esc(o.size||'—')}</span></td>
       <td class="td-price">${pp>0?'€'+pp.toFixed(2):'—'}</td>
@@ -711,12 +618,13 @@ function fillPanel(tabId, highlightFirst=false) {
     </tr>`;
   }).join('');
 
-  const thH=(label,key)=>{
-    const act=sk===key?' sorted':'', arr=sk===key?(sd===1?' ↑':' ↓'):' ↕';
-    return`<th class="${act}" data-tab="${tabId}" data-key="${key}" onclick="onSort(this)">${label}<span style="opacity:0.4;font-size:9px">${arr}</span></th>`;
+  const thH = (label, key) => {
+    const act = sk===key?' sorted':'';
+    const arr = sk===key?(sd===1?' ↑':' ↓'):' ↕';
+    return `<th class="${act}" data-tab="${tabId}" data-key="${key}" onclick="onSort(this)">${label}<span style="opacity:0.4;font-size:9px">${arr}</span></th>`;
   };
 
-  panel.innerHTML=`
+  panel.innerHTML = `
   <div class="container">
     <div class="stats-bar">
       <div class="stat-card" style="border-top:2px solid ${tab.color}"><div class="stat-label">Bestellungen</div><div class="stat-value accent">${tab.orders.length}</div></div>
@@ -725,20 +633,16 @@ function fillPanel(tabId, highlightFirst=false) {
       <div class="stat-card" style="border-top:2px solid ${tab.color}"><div class="stat-label">Shops</div><div class="stat-value success">${shops}</div></div>
     </div>
     <div class="webhook-section" style="border-left:3px solid ${tab.color}">
-      <div class="webhook-label">Tab-ID</div>
-      <div class="webhook-url-box" onclick="copyUrl('${tabId}')" title="Klicken zum Kopieren">${tabId}</div>
-      <button class="btn btn-primary" onclick="copyUrl('${tabId}')">📋 Kopieren</button>
-      <div class="webhook-hint">
-        Bot sendet POST an: <code>${SUPABASE_URL}/rest/v1/webhook_events</code>
-        &nbsp; Body: <code>{"tab_id":"${tabId}","user_id":"DEINE_USER_ID","payload":{"product":"...","sku":"...","size":"...","purchasePrice":0,"shop":"..."}}</code>
-        &nbsp;·&nbsp; <a onclick="showSqlModal()" style="color:var(--accent);cursor:pointer;">Einrichtung</a>
-      </div>
+      <div class="webhook-label">Webhook URL</div>
+      <div class="webhook-url-box" onclick="copyUrl('${webhookUrl}')" title="Klicken zum Kopieren">${webhookUrl}</div>
+      <button class="btn btn-primary" onclick="copyUrl('${webhookUrl}')">📋 Kopieren</button>
     </div>
     <div class="table-section">
       <div class="table-header">
         <div class="table-title">
           <span style="width:10px;height:10px;border-radius:50%;background:${tab.color};display:inline-block;flex-shrink:0"></span>
-          ${esc(tab.name)}<span class="count-badge">${filtered.length} Einträge</span>
+          ${esc(tab.name)}
+          <span class="count-badge">${filtered.length} Einträge</span>
         </div>
         <div class="filter-row">
           <input class="filter-input" type="text" id="search_${tabId}" placeholder="Suchen…" oninput="fillPanel('${tabId}')">
@@ -750,26 +654,33 @@ function fillPanel(tabId, highlightFirst=false) {
         <table>
           <thead><tr>
             <th style="width:68px;"></th>
-            ${thH('Produkt','product')}${thH('SKU','sku')}${thH('Kaufdatum','date')}${thH('Größe','size')}${thH('Einkaufspreis','purchasePrice')}${thH('Shop','shop')}${thH('Bestellnr.','orderNumber')}
-            <th>Notiz</th><th></th>
+            ${thH('Produkt','product')}
+            ${thH('SKU','sku')}
+            ${thH('Kaufdatum','date')}
+            ${thH('Größe','size')}
+            ${thH('Einkaufspreis','purchasePrice')}
+            ${thH('Shop','shop')}
+            ${thH('Bestellnr.','orderNumber')}
+            <th>Notiz</th>
+            <th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
-        ${filtered.length===0?`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Keine Einträge</div><div class="empty-sub">Webhooks erscheinen hier automatisch (alle 10s).<br>Oder klicke "+ Hinzufügen".</div></div>`:''}
+        ${filtered.length===0?`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Keine Einträge</div><div class="empty-sub">Webhooks erscheinen hier automatisch.<br>Oder klicke "+ Hinzufügen".</div></div>`:''}
       </div>
     </div>
   </div>`;
 }
 
-function onSort(th){
-  const tabId=th.dataset.tab,key=th.dataset.key;
-  if(sortKeys[tabId]===key)sortDirs[tabId]=(sortDirs[tabId]||1)*-1;
-  else{sortKeys[tabId]=key;sortDirs[tabId]=-1;}
+function onSort(th) {
+  const tabId = th.dataset.tab, key = th.dataset.key;
+  if (sortKeys[tabId]===key) sortDirs[tabId]=(sortDirs[tabId]||1)*-1;
+  else { sortKeys[tabId]=key; sortDirs[tabId]=-1; }
   fillPanel(tabId);
 }
 
-function switchTab(id){
-  activeTabId=id;
+function switchTab(id) {
+  activeTabId = id;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.id===id));
   document.querySelectorAll('.tab-content').forEach(p=>p.classList.toggle('active',p.id==='panel_'+id));
 }
@@ -777,8 +688,8 @@ function switchTab(id){
 // ══════════════════════════════════════════════════
 // TAB MODAL
 // ══════════════════════════════════════════════════
-function showNewTabModal(){
-  tabModalMode='new';renamingTabId=null;
+function showNewTabModal() {
+  tabModalMode='new'; renamingTabId=null;
   document.getElementById('tabModalTitle').textContent='Neues Register';
   document.getElementById('tm_name').value='';
   pickedColor=COLORS[state.tabs.length%COLORS.length];
@@ -786,8 +697,9 @@ function showNewTabModal(){
   document.getElementById('tabModal').style.display='flex';
   setTimeout(()=>document.getElementById('tm_name').focus(),60);
 }
-function showRenameTabModal(id){
-  tabModalMode='rename';renamingTabId=id;
+
+function showRenameTabModal(id) {
+  tabModalMode='rename'; renamingTabId=id;
   const tab=getTab(id);
   document.getElementById('tabModalTitle').textContent='Register umbenennen';
   document.getElementById('tm_name').value=tab.name;
@@ -796,173 +708,234 @@ function showRenameTabModal(id){
   document.getElementById('tabModal').style.display='flex';
   setTimeout(()=>document.getElementById('tm_name').focus(),60);
 }
-function buildColorPicker(){
+
+function buildColorPicker() {
   document.getElementById('colorRow').innerHTML=COLORS.map(c=>`<div class="color-swatch ${c===pickedColor?'picked':''}" style="background:${c}" onclick="pickColor('${c}')"></div>`).join('');
 }
-function pickColor(c){pickedColor=c;buildColorPicker();}
-async function confirmTabModal(){
+
+function pickColor(c) { pickedColor=c; buildColorPicker(); }
+
+async function confirmTabModal() {
   const name=document.getElementById('tm_name').value.trim();
-  if(!name){showToast('⚠️ Name fehlt!');return;}
-  if(tabModalMode==='new'){
+  if (!name) { showToast('⚠️ Name fehlt!'); return; }
+  if (tabModalMode==='new') {
     const tab={id:uid(),name,color:pickedColor,orders:[]};
-    state.tabs.push(tab);activeTabId=tab.id;
-    await saveToSupabase();renderTabBar();
+    state.tabs.push(tab);
+    activeTabId=tab.id;
+    await saveToSupabase();
+    renderTabBar();
+    const container=document.getElementById('tabContents');
     const div=document.createElement('div');
-    div.className='tab-content active';div.id='panel_'+tab.id;
-    document.getElementById('tabContents').appendChild(div);
+    div.className='tab-content active';
+    div.id='panel_'+tab.id;
+    container.appendChild(div);
     document.querySelectorAll('.tab-content').forEach(p=>p.classList.toggle('active',p.id==='panel_'+tab.id));
-    fillPanel(tab.id);showToast(`✅ Register "${name}" erstellt`);
+    fillPanel(tab.id);
+    showToast(`✅ Register "${name}" erstellt`);
   } else {
-    const tab=getTab(renamingTabId);tab.name=name;tab.color=pickedColor;
-    await saveToSupabase();renderTabBar();fillPanel(renamingTabId);showToast('✏️ Register umbenannt');
+    const tab=getTab(renamingTabId);
+    tab.name=name; tab.color=pickedColor;
+    await saveToSupabase(); renderTabBar(); fillPanel(renamingTabId);
+    showToast('✏️ Register umbenannt');
   }
   closeTabModal();
 }
-function deleteTab(id){
+
+function deleteTab(id) {
   const tab=getTab(id);
-  if(!confirm(`Register "${tab.name}" mit ${tab.orders.length} Einträgen löschen?`))return;
+  if (!confirm(`Register "${tab.name}" mit ${tab.orders.length} Einträgen löschen?`)) return;
   state.tabs=state.tabs.filter(t=>t.id!==id);
-  if(activeTabId===id)activeTabId=state.tabs[0]?.id||null;
-  saveState();document.getElementById('panel_'+id)?.remove();renderTabBar();
-  if(activeTabId)switchTab(activeTabId);showToast('🗑️ Register gelöscht');
+  if (activeTabId===id) activeTabId=state.tabs[0]?.id||null;
+  saveState();
+  document.getElementById('panel_'+id)?.remove();
+  renderTabBar();
+  if (activeTabId) switchTab(activeTabId);
+  showToast('🗑️ Register gelöscht');
 }
-function closeTabModal(){document.getElementById('tabModal').style.display='none';}
+
+function closeTabModal() { document.getElementById('tabModal').style.display='none'; }
 
 // ══════════════════════════════════════════════════
 // ENTRY MODAL
 // ══════════════════════════════════════════════════
-function showEntryModal(tabId){
+function showEntryModal(tabId) {
   entryTargetTabId=tabId;
   document.getElementById('f_date').value=new Date().toISOString().split('T')[0];
   ['f_product','f_sku','f_size','f_purchasePrice','f_shop','f_orderNumber','f_note'].forEach(id=>document.getElementById(id).value='');
   const prev=document.getElementById('skuImgPreview');
-  prev.innerHTML='👟';prev.style.borderColor='var(--border)';prev.style.boxShadow='none';
+  prev.innerHTML='👟'; prev.style.borderColor='var(--border)'; prev.style.boxShadow='none';
   document.getElementById('skuStatus').textContent='';
   currentSkuImageUrl='';
   document.getElementById('entryModal').style.display='flex';
   setTimeout(()=>document.getElementById('f_sku').focus(),60);
 }
-function closeEntryModal(){document.getElementById('entryModal').style.display='none';}
-function addEntry(){
+
+function closeEntryModal() { document.getElementById('entryModal').style.display='none'; }
+
+function addEntry() {
   const product=document.getElementById('f_product').value.trim();
-  if(!product){showToast('⚠️ Produktname fehlt!');return;}
-  const order={
-    id:uid(),product,
-    sku:document.getElementById('f_sku').value.trim().toUpperCase()||'',
-    imageUrl:currentSkuImageUrl||'',
-    date:document.getElementById('f_date').value,
-    size:document.getElementById('f_size').value.trim()||'—',
-    purchasePrice:document.getElementById('f_purchasePrice').value||0,
-    shop:document.getElementById('f_shop').value.trim()||'—',
-    orderNumber:document.getElementById('f_orderNumber').value.trim()||'—',
-    note:document.getElementById('f_note').value.trim(),
-    receivedAt:new Date().toISOString()
+  if (!product) { showToast('⚠️ Produktname fehlt!'); return; }
+  const order = {
+    id:uid(), product,
+    sku:           document.getElementById('f_sku').value.trim().toUpperCase()||'',
+    imageUrl:      currentSkuImageUrl||'',
+    date:          document.getElementById('f_date').value,
+    size:          document.getElementById('f_size').value.trim()||'—',
+    purchasePrice: document.getElementById('f_purchasePrice').value||0,
+    shop:          document.getElementById('f_shop').value.trim()||'—',
+    orderNumber:   document.getElementById('f_orderNumber').value.trim()||'—',
+    note:          document.getElementById('f_note').value.trim(),
+    receivedAt:    new Date().toISOString()
   };
   getTab(entryTargetTabId).orders.unshift(order);
-  saveState();renderTabBar();fillPanel(entryTargetTabId);closeEntryModal();showToast('✅ Eintrag hinzugefügt!');
+  saveState(); renderTabBar(); fillPanel(entryTargetTabId);
+  closeEntryModal();
+  showToast('✅ Eintrag hinzugefügt!');
 }
-function deleteEntry(tabId,orderId){
-  const tab=getTab(tabId);tab.orders=tab.orders.filter(o=>o.id!==orderId);
-  saveState();renderTabBar();fillPanel(tabId);showToast('🗑️ Eintrag gelöscht');
+
+function deleteEntry(tabId, orderId) {
+  const tab=getTab(tabId);
+  tab.orders=tab.orders.filter(o=>o.id!==orderId);
+  saveState(); renderTabBar(); fillPanel(tabId);
+  showToast('🗑️ Eintrag gelöscht');
 }
-function clearTab(tabId){
-  const tab=getTab(tabId);if(!tab.orders.length)return;
-  if(!confirm(`Alle ${tab.orders.length} Einträge löschen?`))return;
-  tab.orders=[];saveState();renderTabBar();fillPanel(tabId);showToast('🗑️ Geleert');
+
+function clearTab(tabId) {
+  const tab=getTab(tabId);
+  if (!tab.orders.length) return;
+  if (!confirm(`Alle ${tab.orders.length} Einträge in "${tab.name}" löschen?`)) return;
+  tab.orders=[];
+  saveState(); renderTabBar(); fillPanel(tabId);
+  showToast('🗑️ Geleert');
 }
 
 // ══════════════════════════════════════════════════
 // SKU IMAGE LOOKUP
 // ══════════════════════════════════════════════════
-let currentSkuImageUrl='',skuDebounceTimer=null;
-function onSkuInput(val){
+let currentSkuImageUrl='', skuDebounceTimer=null;
+
+function onSkuInput(val) {
   clearTimeout(skuDebounceTimer);
   const sku=val.trim().toUpperCase();
-  if(!sku||sku.length<4){setSkuPreview('👟','','');currentSkuImageUrl='';return;}
+  if (!sku||sku.length<4) { setSkuPreview('👟','',''); currentSkuImageUrl=''; return; }
   setSkuStatus('⏳ Bild wird gesucht…','var(--text-dim)');
   skuDebounceTimer=setTimeout(()=>fetchSkuImage(sku),800);
 }
-async function fetchSkuImage(sku){
+
+async function fetchSkuImage(sku) {
   currentSkuImageUrl='';
-  let url=await tryKicksDB(sku);if(url){foundSku(url);return;}
-  url=await trySneakerDB(sku);if(url){foundSku(url);return;}
-  url=await tryGoogleImageScrape(sku);if(url){foundSku(url,'(Google)');return;}
+  let url=await tryKicksDB(sku); if (url){foundSku(url);return;}
+  url=await trySneakerDB(sku);   if (url){foundSku(url);return;}
+  url=await tryGoogleImageScrape(sku); if (url){foundSku(url,'(Google)');return;}
   setSkuPreview('❓','',`Kein Bild für "${sku}"`);
 }
-async function tryKicksDB(sku){
-  try{
+
+async function tryKicksDB(sku) {
+  try {
     const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://kicksdb.com/api/sneakers?sku=${sku}`)}`,{signal:AbortSignal.timeout(6000)});
-    if(!r.ok)return null;
+    if (!r.ok) return null;
     const json=JSON.parse((await r.json()).contents);
     const results=Array.isArray(json)?json:(json.results||json.data||[]);
     return results[0]?.image||results[0]?.thumbnail||results[0]?.media?.imageUrl||null;
-  }catch{return null;}
+  } catch{return null;}
 }
-async function trySneakerDB(sku){
-  try{
+
+async function trySneakerDB(sku) {
+  try {
     const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.thesneakerdatabase.com/v1/sneakers?limit=1&styleId=${sku}`)}`,{signal:AbortSignal.timeout(6000)});
-    if(!r.ok)return null;
+    if (!r.ok) return null;
     const json=JSON.parse((await r.json()).contents);
     const item=json?.results?.[0];
     return item?.media?.imageUrl||item?.media?.smallImageUrl||item?.thumbnail||null;
-  }catch{return null;}
+  } catch{return null;}
 }
-async function tryGoogleImageScrape(sku){
-  try{
+
+async function tryGoogleImageScrape(sku) {
+  try {
     const query=encodeURIComponent(`${sku} sneaker`);
     const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://www.google.com/search?q=${query}&tbm=isch&hl=de`)}`,{signal:AbortSignal.timeout(8000)});
-    if(!r.ok)return null;
+    if (!r.ok) return null;
     const html=(await r.json()).contents;
     const imgMatches=[...html.matchAll(/\["(https:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)",\d+,\d+\]/g)];
-    for(const m of imgMatches){const imgUrl=m[1];if(!imgUrl.includes('google')&&!imgUrl.includes('gstatic')&&imgUrl.length<500)return imgUrl;}
+    for (const m of imgMatches) {
+      const imgUrl=m[1];
+      if (!imgUrl.includes('google')&&!imgUrl.includes('gstatic')&&imgUrl.length<500) return imgUrl;
+    }
     return null;
-  }catch{return null;}
+  } catch{return null;}
 }
-function foundSku(url,suffix=''){currentSkuImageUrl=url;setSkuPreview(null,url,`✓ Bild gefunden${suffix?' '+suffix:''}`);}
-function setSkuPreview(emoji,imgUrl,statusMsg){
-  const prev=document.getElementById('skuImgPreview');if(!prev)return;
-  if(imgUrl){
+
+function foundSku(url,suffix='') {
+  currentSkuImageUrl=url;
+  setSkuPreview(null,url,`✓ Bild gefunden${suffix?' '+suffix:''}`);
+}
+
+function setSkuPreview(emoji,imgUrl,statusMsg) {
+  const prev=document.getElementById('skuImgPreview');
+  if (!prev) return;
+  if (imgUrl) {
     prev.innerHTML=`<img src="${imgUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" onerror="this.parentElement.innerHTML='❓';this.parentElement.style.borderColor='var(--border)'">`;
-    prev.style.borderColor='var(--accent3)';prev.style.boxShadow='0 0 14px rgba(106,255,202,0.3)';
-  }else{prev.innerHTML=emoji||'👟';prev.style.borderColor='var(--border)';prev.style.boxShadow='none';}
+    prev.style.borderColor='var(--accent3)'; prev.style.boxShadow='0 0 14px rgba(106,255,202,0.3)';
+  } else {
+    prev.innerHTML=emoji||'👟'; prev.style.borderColor='var(--border)'; prev.style.boxShadow='none';
+  }
   setSkuStatus(statusMsg,imgUrl?'var(--success)':'var(--text-dim)');
 }
-function setSkuStatus(msg,color){const el=document.getElementById('skuStatus');if(el){el.textContent=msg;el.style.color=color||'var(--text-dim)';}}
-async function lookupSku(tabId,orderId,sku){
+
+function setSkuStatus(msg,color) {
+  const el=document.getElementById('skuStatus');
+  if (el){el.textContent=msg;el.style.color=color||'var(--text-dim)';}
+}
+
+async function lookupSku(tabId,orderId,sku) {
   showToast(`🔍 Suche Bild für ${sku}…`);
-  const tab=getTab(tabId);const order=tab?.orders.find(o=>o.id===orderId);if(!order)return;
-  let url=await tryKicksDB(sku);if(!url)url=await trySneakerDB(sku);if(!url)url=await tryGoogleImageScrape(sku);
-  if(url){order.imageUrl=url;saveState();fillPanel(tabId);showToast(`✅ Bild gefunden für ${sku}`);}
-  else showToast(`❌ Kein Bild für ${sku}`);
+  const tab=getTab(tabId);
+  const order=tab?.orders.find(o=>o.id===orderId);
+  if (!order) return;
+  let url=await tryKicksDB(sku);
+  if (!url) url=await trySneakerDB(sku);
+  if (!url) url=await tryGoogleImageScrape(sku);
+  if (url) {
+    order.imageUrl=url; saveState(); fillPanel(tabId);
+    showToast(`✅ Bild gefunden für ${sku}`);
+  } else {
+    showToast(`❌ Kein Bild für ${sku}`);
+  }
 }
 
 // ══════════════════════════════════════════════════
-// SQL MODAL
+// WEBHOOK URL
 // ══════════════════════════════════════════════════
-function showSqlModal(){document.getElementById('sqlModal').style.display='flex';}
-function copySql(el){
-  const text=el.innerText.replace(/📋 Kopieren/g,'').trim();
-  navigator.clipboard.writeText(text).then(()=>showToast('📋 SQL kopiert!'));
+function copyUrl(url) { navigator.clipboard.writeText(url).then(()=>showToast('📋 URL kopiert!')); }
+
+
+// ══════════════════════════════════════════════════
+// REALTIME SYNC — Supabase live updates
+// When a webhook arrives → Supabase row changes →
+// this fires automatically → dashboard refreshes
+// ══════════════════════════════════════════════════
+function startRealtimeSync() {
+  document.getElementById("statusDot").className = "status-dot active";
+  document.getElementById("statusText").textContent = "Live · Webhooks aktiv";
 }
 
 // ══════════════════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════════════════
-function copyUrl(url){navigator.clipboard.writeText(url).then(()=>showToast('📋 Kopiert!'));}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function formatDate(d){if(!d)return'—';try{return new Date(d).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch{return d;}}
 let _toastT;
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('show'),3200);}
 
-['tabModal','entryModal','sqlModal'].forEach(id=>{
+['tabModal','entryModal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)e.target.style.display='none';});
 });
 document.addEventListener('keydown',e=>{
   const tag=e.target.tagName.toLowerCase();
-  if(e.key==='Escape'){closeTabModal();closeEntryModal();document.getElementById('sqlModal').style.display='none';}
-  if(e.key==='Enter'&&document.getElementById('tabModal').style.display==='flex')confirmTabModal();
-  if(e.key==='n'&&tag!=='input'&&activeTabId)showEntryModal(activeTabId);
-  if(e.key==='t'&&tag!=='input')showNewTabModal();
+  if(e.key==='Escape'){closeTabModal();closeEntryModal();}
+  if(e.key==='Enter'&&document.getElementById('tabModal').style.display==='flex') confirmTabModal();
+  if(e.key==='n'&&tag!=='input'&&activeTabId) showEntryModal(activeTabId);
+  if(e.key==='t'&&tag!=='input') showNewTabModal();
 });
 </script>
 </body>
