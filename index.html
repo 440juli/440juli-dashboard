@@ -845,7 +845,9 @@ function fillPanel(tabId) {
   const avg   = tab.orders.length ? total/tab.orders.length : 0;
   const shops = new Set(tab.orders.map(o=>o.shop).filter(Boolean)).size;
   const idx   = state.tabs.indexOf(tab);
-  const webhookUrl = `${window.location.origin}/api/webhook/${tabId}`;
+  // Replace YOUR_PROJECT_REF with your Supabase project reference
+  const SUPABASE_FUNCTIONS_URL = SUPABASE_URL.replace('.supabase.co', '.supabase.co') + '/functions/v1/webhook';
+  const webhookUrl = `${SUPABASE_FUNCTIONS_URL}/${tabId}`;
 
   const rows = filtered.map((o,i) => {
     const pp = parseFloat(o.purchasePrice)||0;
@@ -909,11 +911,13 @@ function fillPanel(tabId) {
           <thead><tr>
             <th style="width:68px;"></th>
             ${thH('Produkt','product')}
-            ${thH('SKU','sku')}
+            ${thH('ID / SKU','sku')}
             ${thH('Kaufdatum','date')}
-            ${thH('Größe','size')}
-            ${thH('Einkaufspreis','purchasePrice')}
+            ${thH('Preis','purchasePrice')}
             ${thH('Shop','shop')}
+            ${thH('Größe','size')}
+            ${thH('Region','region')}
+            ${thH('Payment','payment')}
             ${thH('Bestellnr.','orderNumber')}
             <th>Notiz</th>
             <th></th>
