@@ -1,0 +1,316 @@
+const http = require('http');
+const https = require('https');
+
+const SUPABASE_URL = 'https://cyevfuadksidwqoyzhhr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5ZXZmdWFka3NpZHdxb3l6aGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Njk1NTcsImV4cCI6MjA4ODU0NTU1N30.y9oDckUgt7B36ZbW--EIgb-GOuYsdaHx_gryX2IqdoI';
+
+function uid() {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+function loadState() {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'cyevfuadksidwqoyzhhr.supabase.co',
+      path: '/rest/v1/dashboard_state?select=state,user_id',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    };
+    const req = https.get(options, (res) => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch(e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+  });
+}
+
+function saveState(userId, state) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ state, updated_at: new Date().toISOString() });
+    const options = {
+      hostname: 'cyevfuadksidwqoyzhhr.supabase.co',
+      path: `/rest/v1/dashboard_state?user_id=eq.${userId}`,
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=minimal',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+    const req = https.request(options, (res) => {
+      res.on('data', () => {});
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function clean(s) {
+  return (s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+}
+
+function parseMarkdownLink(str) {
+  const match = str && str.match(/^\[(.+?)\]\((.+?)\)$/);
+  if (match) return { text: match[1], url: match[2] };
+  return { text: str || '', url: '' };
+}
+
+function parseEmbed(embed) {
+  const fields = {};
+  (embed.fields || []).forEach(f => {
+    fields[f.name.toLowerCase().trim()] = f.value;
+  });
+
+  const titleParsed = parseMarkdownLink(embed.title || '');
+
+  return {
+    product:     titleParsed.text || fields['product'] || fields['produkt'] || fields['item'] || fields['name'] || '',
+    productUrl:  titleParsed.url  || '',
+    sku:         fields['sku']    || fields['style']   || fields['style id'] || '',
+    size:        fields['size']   || fields['groesse'] || fields['gr\u00f6\u00dfe'] || '',
+    price:       fields['price']  || fields['preis']   || fields['total']    || '',
+    shop:        fields['shop']   || fields['store']   || embed.description  || (embed.author && embed.author.name) || '',
+    orderNumber: fields['order']  || fields['bestellnr'] || fields['order number'] || fields['order#'] || '',
+  };
+}
+
+function parseContent(content) {
+  if (!content) return null;
+
+  const result = { product: '', productUrl: '', sku: '', size: '', price: '', shop: '', orderNumber: '' };
+
+  const linkMatch = content.match(/^\[(.+?)\]\((https?:\/\/[^\)]+)\)/);
+  if (linkMatch) {
+    result.product    = linkMatch[1].trim();
+    result.productUrl = linkMatch[2].trim();
+    try {
+      result.shop = new URL(result.productUrl).hostname.replace('www.', '');
+    } catch (_) {}
+  }
+
+  const sizeMatch = content.match(/\b(EU|US|UK)?\s*(\d{1,2}(?:[.,]\d)?)\s*(EU|US|UK)?\b/i);
+  if (sizeMatch) {
+    const prefix = sizeMatch[1] || sizeMatch[3] || '';
+    result.size = (prefix + sizeMatch[2]).trim();
+  }
+
+  const priceMatch = content.match(/(?:price|preis|total)?[:\s]*([€$£]?\s*\d+[.,]\d{2}\s*[€$£]?)/i);
+  if (priceMatch) result.price = priceMatch[1].trim();
+
+  const skuMatch = content.match(/(?:sku|style[- ]?id?)[:\s]+([A-Z0-9\-]+)/i);
+  if (skuMatch) result.sku = skuMatch[1].trim();
+
+  const orderMatch = content.match(/(?:order[#\-\s]?(?:number|nr)?)[:\s]+([A-Z0-9\-]+)/i);
+  if (orderMatch) result.orderNumber = orderMatch[1].trim();
+
+  return result.product ? result : null;
+}
+
+function parsePayload(payload) {
+  if (payload.order) {
+    const o = payload.order;
+    return {
+      id:            uid(),
+      product:       clean(o.product     || ''),
+      sku:           clean(o.sku         || ''),
+      size:          clean(o.size        || ''),
+      purchasePrice: clean(o.price       || o.purchasePrice || ''),
+      shop:          clean(o.shop        || ''),
+      orderNumber:   clean(o.orderNumber || ''),
+      productUrl:    o.productUrl        || '',
+      date:          new Date().toISOString().split('T')[0],
+      receivedAt:    new Date().toISOString(),
+      imageUrl:      o.imageUrl          || '',
+    };
+  }
+
+  const embeds = payload.embeds || [];
+  const fields = {};
+  (embeds[0]?.fields || []).forEach(f => {
+    fields[f.name.toLowerCase().trim()] = f.value;
+  });
+
+  return {
+    id:            uid(),
+    product:       clean(fields['product'] || fields['produkt'] || fields['item'] || embeds[0]?.title || ''),
+    sku:           clean(fields['sku']     || fields['style']   || ''),
+    size:          clean(fields['size']    || fields['größe']   || fields['groesse'] || ''),
+    purchasePrice: clean(fields['price']   || fields['preis']   || fields['total']   || ''),
+    shop:          clean(fields['shop']    || fields['store']   || embeds[0]?.description || (embeds[0]?.author?.name) || ''),
+    orderNumber:   clean(fields['order']   || fields['bestellnr'] || fields['order number'] || fields['order#'] || ''),
+    productUrl:    '',
+    date:          new Date().toISOString().split('T')[0],
+    receivedAt:    new Date().toISOString(),
+    imageUrl:      embeds[0]?.thumbnail?.url || embeds[0]?.image?.url || '',
+  };
+}
+
+function findTabByDiscordWebhookUrl(discordUrl) {
+  return new Promise(async (resolve, reject) => {
+    const rows = await loadState();
+    if (!rows || !rows.length) { resolve(null); return; }
+    const state = rows[0].state;
+    for (const tab of (state.tabs || [])) {
+      if (tab.discordWebhookUrl === discordUrl) {
+        resolve({ tab, userId: rows[0].user_id, state });
+        return;
+      }
+    }
+    resolve(null);
+  });
+}
+
+function parseDiscordWebhook(payload) {
+  if (payload.content) {
+    const result = parseContent(payload.content);
+    if (result) return result;
+  }
+
+  if (payload.embeds && payload.embeds.length > 0) {
+    return parseEmbed(payload.embeds[0]);
+  }
+
+  return null;
+}
+
+const server = http.createServer(async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  if (req.method === 'POST' && req.url.startsWith('/api/discord/')) {
+    let body = '';
+    req.on('data', d => body += d);
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        
+        const webhookUrl = 'https://discord.com' + req.url.replace('/api/discord/', '/api/webhooks/');
+        
+        const tabData = await findTabByDiscordWebhookUrl(webhookUrl);
+        
+        if (!tabData) {
+          console.warn('Kein Register für Discord-Webhook gefunden:', req.url);
+          res.writeHead(404); res.end('No matching tab found'); 
+          return;
+        }
+
+        const { tab, userId, state } = tabData;
+        const order = parseDiscordWebhook(payload);
+
+        if (!order || !order.product) {
+          console.warn('Kein Produkt in Discord-Webhook gefunden');
+          res.writeHead(200); res.end('OK'); 
+          return;
+        }
+
+        const newOrder = {
+          id: uid(),
+          product: order.product,
+          sku: order.sku || '',
+          size: order.size || '',
+          purchasePrice: order.price || '',
+          shop: order.shop || '',
+          orderNumber: order.orderNumber || '',
+          productUrl: order.productUrl || '',
+          date: new Date().toISOString().split('T')[0],
+          receivedAt: new Date().toISOString(),
+          imageUrl: '',
+        };
+
+        tab.orders = tab.orders || [];
+        tab.orders.unshift(newOrder);
+
+        await saveState(userId, state);
+        console.log(`Discord-Webhook gespeichert in Tab '${tab.name}'!`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, order: newOrder }));
+
+      } catch(e) {
+        console.error('Discord Webhook Fehler:', e.message);
+        res.writeHead(500); res.end('Internal Server Error');
+      }
+    });
+    return;
+  }
+
+  const match = req.url.match(/^\/api\/webhook\/([^/?]+)/);
+  if (req.method === 'POST' && match) {
+    const tabId = match[1];
+    let body = '';
+    req.on('data', d => body += d);
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        const order = parsePayload(payload);
+
+        console.log('Order erhalten:', JSON.stringify(order, null, 2));
+
+        if (!order.product) {
+          console.warn('Kein Produkt erkannt – Order wird trotzdem gespeichert.');
+        }
+
+        const rows = await loadState();
+        if (!rows || !rows.length) {
+          console.error('Kein State in Supabase gefunden!');
+          res.writeHead(404); res.end('No state found'); return;
+        }
+
+        const userId = rows[0].user_id;
+        const state  = rows[0].state;
+        const tab    = (state.tabs || []).find(t => t.id === tabId);
+
+        if (!tab) {
+          console.error(`Tab '${tabId}' nicht gefunden! Vorhandene Tabs:`, (state.tabs || []).map(t => t.id));
+          res.writeHead(404); res.end(`Tab '${tabId}' not found`); return;
+        }
+
+        tab.orders = tab.orders || [];
+        tab.orders.unshift(order);
+
+        await saveState(userId, state);
+        console.log(`Gespeichert in Tab '${tabId}'! Orders jetzt: ${tab.orders.length}`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, order }));
+
+      } catch(e) {
+        console.error('Server Fehler:', e.message);
+        res.writeHead(500); res.end('Internal Server Error');
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end('Not found');
+});
+
+server.listen(3000, () => {
+  console.log('[CookTracker] Webhook Server läuft auf Port 3000');
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[CookTracker] Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[CookTracker] Uncaught Exception:', err.message);
+  setTimeout(() => process.exit(1), 1000);
+});
